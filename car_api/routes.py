@@ -1,12 +1,14 @@
 from car_api import app, db, oauth
-from flask import render_template, request, redirect, url_for, flash, session
+from flask import render_template, request, redirect, url_for, flash, session, jsonify
 
 from car_api.forms import UserLoginForm
-from car_api.models import User, check_password_hash
+from car_api.models import User, check_password_hash, Car, car_schema, cars_schema
 
 from flask_login import login_user, logout_user, current_user, login_required
 
 import os
+
+from car_api.helpers import get_jwt, token_required, verify_owner
 
 @app.route('/')
 def home():
@@ -64,6 +66,77 @@ def logout():
         for key in list(session.keys()):
             session.pop(key)
     return redirect(url_for('home'))
+
+@app.route('/profile', methods = ['GET'])
+@login_required
+def profile():
+    jwt = get_jwt(current_user)
+    return render_template('profile.html', jwt = jwt)
+
+# CREATE DRONE ENDPOINT
+@app.route('/cars', methods = ['POST'])
+@token_required
+def create_car(current_user_token):
+    print(current_user_token)
+    make = request.json['make']
+    price = request.json['price']
+    model = request.json['model']
+    color = request.json['color']
+    user_id = current_user_token.token
+
+    car = Car(make, model, color, price, user_id = user_id)
+
+    db.session.add(car)
+    db.session.commit()
+
+    response = car_schema.dump(car)
+    return jsonify(response)
+
+# RETRIEVE ALL DRONES ENDPOINT
+@app.route('/cars', methods = ['GET'])
+@token_required
+def get_cars(current_user_token):
+    owner, current_user_token = verify_owner(current_user_token)
+    cars = Car.query.filter_by(user_id = owner.user_id).all()
+    response =  cars_schema.dump(cars)
+    return jsonify(response)
+
+# RETRIEVE ONE DRONE ENDPOINT
+@app.route('/cars/<id>', methods = ['GET'])
+@token_required
+def get_car(current_user_token, id):
+    owner, current_user_token = verify_owner(current_user_token)
+    car = Car.query.get(id)
+    response = car_schema.dump(car)
+    return jsonify(response)
+
+# UPDATE DRONE ENDPOINT
+@app.route('/cars/<id>', methods = ['POST', 'PUT'])
+@token_required
+def update_car(current_user_token, id):
+    owner, current_user_token = verify_owner(current_user_token)
+    car = Car.query.get(id)
+
+    car.make = request.json['make']
+    car.price = request.json['price']
+    car.model = request.json['model']
+    car.color = request.json['color']
+
+    db.session.commit()
+    response = car_schema.dump(car)
+    return jsonify(response)
+
+# DELETE DRONE ENDPOINT
+@app.route('/cars/<id>', methods = ['DELETE'])
+@token_required
+def delete_car(current_user_token, id):
+    owner, current_user_token = verify_owner(current_user_token)
+    car = Car.query.get(id)
+    db.session.delete(car)
+    db.session.commit()
+    response = car_schema.dump(car)
+    return jsonify(response)
+
 
 google = oauth.register(
     name='google',

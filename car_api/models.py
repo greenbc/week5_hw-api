@@ -1,4 +1,4 @@
-from car_api import app, db, login_manager
+from car_api import app, db, login_manager, ma
 import uuid
 from datetime import datetime
 
@@ -19,7 +19,7 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(150), nullable = False)
     password = db.Column(db.String, nullable = True, default='')
     g_auth_verify = db.Column(db.Boolean, default = False)
-    token = db.Column(db.String, default='')
+    token = db.Column(db.String, default='', unique = True)
     date_created = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
     drone = db.relationship('Car', backref = 'owner', lazy = True)
 
@@ -51,7 +51,7 @@ class Car(db.Model):
     model = db.Column(db.String(150))
     color = db.Column(db.String(150))
     price = db.Column(db.Integer)
-    user_id = db.Column(db.String, db.ForeignKey('user.id'), nullable = False)
+    user_id = db.Column(db.String, db.ForeignKey('user.token'), nullable = False)
 
     def __init__(self,make,model,color,price,user_id):
         self.make = make
@@ -71,3 +71,10 @@ class Car(db.Model):
             "color": self.color,
             "price": self.price
         }
+
+class CarSchema(ma.Schema):
+    class Meta:
+        fields = ['id', 'make', 'model', 'color', 'price']
+
+car_schema = CarSchema()
+cars_schema = CarSchema(many=True)
